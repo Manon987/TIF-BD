@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+salida/
+.env
+.vscode/launch.json
