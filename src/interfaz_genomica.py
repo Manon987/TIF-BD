@@ -9,14 +9,18 @@ Uso:
     python src/interfaz_genomica.py                # todas las secuencias
     python src/interfaz_genomica.py --min-long 30  # solo secuencias de >= 30 nt
 
-Datos de conexión por variables de entorno (opcionales):
-    PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+Al ejecutarlo pide por teclado el nombre de la base y la contraseña (la contraseña
+no se muestra al escribir ni se guarda en ningún archivo).
+Variables de entorno opcionales: PGHOST, PGPORT, PGUSER (por defecto localhost,
+5432, postgres) y PGDATABASE (nombre sugerido por defecto).
 Salida: carpeta ./salida con el gráfico (.png) y la tabla (.csv)
 """
 import argparse
+import getpass
 import os
+
 import matplotlib
-matplotlib.use("Agg")  
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -25,19 +29,43 @@ import psycopg2
 SALIDA = "salida"
 ORDEN_CLASES = ["bacteria", "virus", "planta", "humano"]
 
-def conectar():
-    '''para conectar con la base de datos'''
+
+def pedir_datos():
+    """Pide por teclado el nombre de la base y la contraseña (sin mostrarla)."""
+    defecto = os.environ.get("PGDATABASE", "genomica")
+    base = input(f"Nombre de la base de datos [{defecto}]: ").strip() or defecto
+    clave = getpass.getpass("Contraseña de PostgreSQL (no se ve al escribir): ")
+    return base, clave
+
+
+def conectar(dbname, password):
     return psycopg2.connect(
         host=os.environ.get("PGHOST", "localhost"),
         port=int(os.environ.get("PGPORT", "5432")),
-        dbname=os.environ.get("PGDATABASE", "genomica"),
+        dbname=dbname,
         user=os.environ.get("PGUSER", "postgres"),
-        password=os.environ.get("PGPASSWORD", ""),
+        password=password,
     )
 
 
+def conectar_interactivo(intentos=3):
+    for i in range(1, intentos + 1):
+        base, clave = pedir_datos()
+        try:
+            return conectar(base, clave)
+        except (psycopg2.OperationalError, UnicodeDecodeError) as e:
+            # UnicodeDecodeError: en Windows en español, el mensaje de error del
+            # servidor a veces no se puede decodificar; se muestra un texto genérico.
+            detalle = str(e).strip() if isinstance(e, psycopg2.OperationalError) else \
+                "contraseña incorrecta o base inexistente"
+            print(f"\nNo se pudo conectar: {detalle}")
+            if i < intentos:
+                print(f"Intento {i} de {intentos}. Probá de nuevo.\n")
+    raise SystemExit("Demasiados intentos fallidos. Verificá que PostgreSQL esté "
+                     "encendido, el nombre de la base y la contraseña.")
+
+
 def consulta_df(con, sql, params=()):
-    
     cur = con.cursor()
     cur.execute(sql, params)
     filas = cur.fetchall()
@@ -56,11 +84,8 @@ JOIN organismo o ON o.id_clase = m.id_clase
 WHERE s.longitud >= %s
 ORDER BY m.codigo_muestra
 """
-
-
-
 def composicion_nucleotidos(df):
-    '''% promedio de A, T, C, G por clase de organismo.'''
+    """% promedio de A, T, C, G por clase de organismo."""
     d = df.copy()
     for n in ["a", "t", "c", "g"]:
         d[f"pct_{n}"] = d[f"cant_{n}"] / d["longitud"] * 100
@@ -71,7 +96,7 @@ def composicion_nucleotidos(df):
 
 
 def graficar(medias, ruta):
-    '''grafica las barras'''
+    """Barras agrupadas: un grupo por clase, una barra por nucleótido."""
     fig, ax = plt.subplots(figsize=(7.5, 4.5))
     x = np.arange(len(medias))
     ancho = 0.2
@@ -86,7 +111,6 @@ def graficar(medias, ruta):
     fig.savefig(ruta, dpi=150)
     plt.close(fig)
 
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -95,7 +119,7 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(SALIDA, exist_ok=True)
-    con = conectar()
+    con = conectar_interactivo()
     try:
         df = consulta_df(con, SQL_SECUENCIAS, (args.min_long,))
     finally:
