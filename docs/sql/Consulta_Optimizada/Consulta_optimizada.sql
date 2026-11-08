@@ -4,7 +4,11 @@ FROM (
     FROM secuenciaADN 
     WHERE longitud > 40
 ) s
-JOIN muestra m ON s.codigo_muestra = m.codigo_muestra
+JOIN (
+	SELECT codigo_muestra, cadena_nucleotidos, longitud
+	FROM secuenciaADN
+	WHERE longitud > 40
+)s
 JOIN (
     SELECT id_riesgo 
     FROM nivelRiesgo 
