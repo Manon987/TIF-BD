@@ -1,8 +1,8 @@
 """
 Interfaz de acceso a datos - Laboratorio de genómica (TIF Bases de Datos)
 
-Se conecta a PostgreSQL con psycopg2 (DB-API 2.0), trae las secuencias de ADN
-con una consulta parametrizada y grafica la composición promedio de nucleótidos
+Se conecta a PostgreSQL con psycopg2, trae las secuencias de ADN 
+y grafica la composición promedio de nucleótidos
 (A, T, C, G) por clase de organismo, algo que SQL solo no puede dibujar.
 
 Uso:
